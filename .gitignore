@@ -1,8 +1,35 @@
 @'
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.venv/
+# Event log datasets
+*.xes
+*.xes.gz
+*.gz
+data/raw/*.xes
+data/raw/*.xes.gz
 BPI Challenge 2017_1_all.zip
 BPI Challenge 2017_1_all/
+
+# Python virtual environment
+.venv/
+venv/
+env/
+ENV/
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor / IDE settings
+.vscode/
+.idea/
+
+# macOS / OS metadata
+.DS_Store
+Thumbs.db
 '@ | Set-Content -Encoding UTF8 .gitignore
