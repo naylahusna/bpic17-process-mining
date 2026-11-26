@@ -53,32 +53,39 @@ class Panel1118(QWidget):
         self._worker: _Worker1118 | None = None
 
         self.btn_run = QPushButton("Jalankan Analisis")
+        self.btn_run.setObjectName("PrimaryButton")
         self.btn_reset = QPushButton("Reset")
+        self.btn_reset.setObjectName("SecondaryButton")
         self.progress = QProgressBar()
         self.progress.setRange(0, 1)
         self.progress.setMaximumWidth(160)
         self.status = QLabel("Impor log XES dulu.")
+        self.status.setObjectName("Muted")
 
         self.answer = QLabel("")
-        self.answer.setStyleSheet("font-size: 15px; font-weight: bold;")
+        self.answer.setObjectName("AnswerBanner")
 
         self.note = QLabel(
             "<b>Exercise 11.18 (Same Resource):</b> Memilih case yang memiliki minimal 2 aktivitas "
             "<i>W_Assess Potential Fraud</i> berstatus <b>complete</b> oleh <b>resource teridentifikasi yang sama</b>. "
             "Resource kosong/NaN dikeluarkan. Level case: 1 case dihitung 1 kali."
         )
+        self.note.setObjectName("InfoText")
         self.note.setWordWrap(True)
 
         self.info = AnalysisInfoBar()
         self.explorer = CaseExplorerWidget()
 
         bar = QHBoxLayout()
+        bar.setSpacing(10)
         bar.addWidget(self.btn_run)
         bar.addWidget(self.btn_reset)
         bar.addWidget(self.progress)
         bar.addWidget(self.status, 1)
 
         lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(12)
         lay.addLayout(bar)
         lay.addWidget(self.note)
         lay.addWidget(self.answer)
@@ -159,5 +166,7 @@ class Panel1118(QWidget):
         self.result = None
         self.answer.setText("")
         self.info.clear()
-        self.explorer.set_cases(pd.DataFrame(), {})
+        self.explorer.clear()
+        self.progress.setRange(0, 1)
+        self.progress.setValue(0)
         self.status.setText("Siap." if self._df is not None else "Impor log XES dulu.")

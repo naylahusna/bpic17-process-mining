@@ -17,6 +17,7 @@ for p in [str(REPO_ROOT), str(REPO_ROOT / "anggota4"), str(REPO_ROOT / "src")]:
     if p not in sys.path:
         sys.path.insert(0, p)
 
+from anggota1.theme import configure_table  # noqa: F401
 from src.analysis.columns import ACT, CASE, LIFE, POS, TS
 from src.analysis.exercise_11_15 import (Exercise1115Result,
                                          analyze_repeated_complete,
@@ -53,32 +54,39 @@ class Panel1115(QWidget):
         self._worker: _Worker1115 | None = None
 
         self.btn_run = QPushButton("Jalankan Analisis")
+        self.btn_run.setObjectName("PrimaryButton")
         self.btn_reset = QPushButton("Reset")
+        self.btn_reset.setObjectName("SecondaryButton")
         self.progress = QProgressBar()
         self.progress.setRange(0, 1)
         self.progress.setMaximumWidth(160)
         self.status = QLabel("Impor log XES dulu.")
+        self.status.setObjectName("Muted")
 
         self.answer = QLabel("")
-        self.answer.setStyleSheet("font-size: 15px; font-weight: bold;")
+        self.answer.setObjectName("AnswerBanner")
 
         self.note = QLabel(
             "<b>Exercise 11.15 (Repeated Complete):</b> Memilih case yang memiliki aktivitas "
             "<i>W_Assess Potential Fraud</i> dengan status <b>complete</b> minimal 2 kali. "
             "Status schedule/start/abort diabaikan. Level case: 1 case dihitung 1 kali."
         )
+        self.note.setObjectName("InfoText")
         self.note.setWordWrap(True)
 
         self.info = AnalysisInfoBar()
         self.explorer = CaseExplorerWidget()
 
         bar = QHBoxLayout()
+        bar.setSpacing(10)
         bar.addWidget(self.btn_run)
         bar.addWidget(self.btn_reset)
         bar.addWidget(self.progress)
         bar.addWidget(self.status, 1)
 
         lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(12)
         lay.addLayout(bar)
         lay.addWidget(self.note)
         lay.addWidget(self.answer)
@@ -158,5 +166,7 @@ class Panel1115(QWidget):
         self.result = None
         self.answer.setText("")
         self.info.clear()
-        self.explorer.set_cases(pd.DataFrame(), {})
+        self.explorer.clear()
+        self.progress.setRange(0, 1)
+        self.progress.setValue(0)
         self.status.setText("Siap." if self._df is not None else "Impor log XES dulu.")

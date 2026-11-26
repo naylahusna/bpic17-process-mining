@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QDialog,
     QDialogButtonBox,
+    QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -21,6 +22,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -28,6 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 from anggota4.ordering_11_22 import prepare_log
+from anggota1.theme import configure_table, fit_table_height
 from .analysis import (
     ACTIVITY,
     CASE_ID,
@@ -79,11 +82,12 @@ class Panel117(QWidget):
 
     def _build_ui(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(4, 4, 4, 4)
-        root.setSpacing(12)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(14)
 
         # Actions and processing status.
         action_row = QHBoxLayout()
+        action_row.setSpacing(10)
 
         self.btn_run = QPushButton("Jalankan Analisis")
         self.btn_run.setObjectName("PrimaryButton")
@@ -116,27 +120,24 @@ class Panel117(QWidget):
         self.description.setWordWrap(True)
         root.addWidget(self.description)
 
-        # Summary table.
+        # Summary card.
+        summary_card = QFrame()
+        summary_card.setObjectName("Card")
+        summary_lay = QVBoxLayout(summary_card)
+        summary_lay.setContentsMargins(16, 14, 16, 14)
+        summary_lay.setSpacing(10)
+
         summary_title = QLabel("RINGKASAN HASIL ANALISIS")
         summary_title.setObjectName("SectionTitle")
-        root.addWidget(summary_title)
+        summary_lay.addWidget(summary_title)
 
         self.summary = QTableWidget(0, 4)
         self.summary.setObjectName("DataTable")
         self.summary.setHorizontalHeaderLabels(
             ["Butir", "Pertanyaan", "Jumlah Case", "Rata-rata (hari)"]
         )
-        self.summary.setSelectionBehavior(
-            QAbstractItemView.SelectionBehavior.SelectRows
-        )
-        self.summary.setSelectionMode(
-            QAbstractItemView.SelectionMode.SingleSelection
-        )
-        self.summary.setEditTriggers(
-            QAbstractItemView.EditTrigger.NoEditTriggers
-        )
-        self.summary.setAlternatingRowColors(True)
-        self.summary.verticalHeader().setVisible(False)
+        configure_table(self.summary, min_rows=5, row_height=38, header_height=42)
+        fit_table_height(self.summary, 5, min_rows=5, max_rows=5, row_height=38, header_height=42)
         self.summary.horizontalHeader().setSectionResizeMode(
             0, QHeaderView.ResizeMode.ResizeToContents
         )
@@ -149,60 +150,60 @@ class Panel117(QWidget):
         self.summary.horizontalHeader().setSectionResizeMode(
             3, QHeaderView.ResizeMode.ResizeToContents
         )
-        self.summary.setMaximumHeight(220)
-        root.addWidget(self.summary)
+        summary_lay.addWidget(self.summary)
 
         self.rule_label = QLabel(
             "Pilih baris A–E untuk melihat aturan dan daftar case."
         )
         self.rule_label.setWordWrap(True)
         self.rule_label.setObjectName("Muted")
-        root.addWidget(self.rule_label)
+        self.rule_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        summary_lay.addWidget(self.rule_label)
 
-        # Case search.
+        root.addWidget(summary_card)
+
+        # Case list card.
+        cases_card = QFrame()
+        cases_card.setObjectName("Card")
+        cases_lay = QVBoxLayout(cases_card)
+        cases_lay.setContentsMargins(16, 14, 16, 14)
+        cases_lay.setSpacing(10)
+
         search_row = QHBoxLayout()
+        search_row.setSpacing(10)
         search_label = QLabel("Cari Case ID")
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Masukkan Case ID...")
+        self.search_input.setClearButtonEnabled(True)
         self.search_button = QPushButton("Cari")
         self.search_button.setObjectName("SecondaryButton")
 
         search_row.addWidget(search_label)
         search_row.addWidget(self.search_input, 1)
         search_row.addWidget(self.search_button)
-        root.addLayout(search_row)
+        cases_lay.addLayout(search_row)
 
         self.case_count_label = QLabel("0 case")
         self.case_count_label.setObjectName("Muted")
-        root.addWidget(self.case_count_label)
+        cases_lay.addWidget(self.case_count_label)
 
-        # Case result table.
         self.cases = QTableWidget(0, 2)
         self.cases.setObjectName("DataTable")
         self.cases.setHorizontalHeaderLabels(
             ["Case ID", "Durasi (hari)"]
         )
-        self.cases.setSelectionBehavior(
-            QAbstractItemView.SelectionBehavior.SelectRows
-        )
-        self.cases.setSelectionMode(
-            QAbstractItemView.SelectionMode.SingleSelection
-        )
-        self.cases.setEditTriggers(
-            QAbstractItemView.EditTrigger.NoEditTriggers
-        )
-        self.cases.setAlternatingRowColors(True)
-        self.cases.verticalHeader().setVisible(False)
+        configure_table(self.cases, min_rows=5, row_height=40, header_height=44)
+        fit_table_height(self.cases, 0, min_rows=5, max_rows=7, row_height=40, header_height=44)
         self.cases.horizontalHeader().setSectionResizeMode(
             0, QHeaderView.ResizeMode.Stretch
         )
         self.cases.horizontalHeader().setSectionResizeMode(
             1, QHeaderView.ResizeMode.ResizeToContents
         )
-        root.addWidget(self.cases, 1)
+        cases_lay.addWidget(self.cases)
 
-        # Pagination and case detail.
         footer = QHBoxLayout()
+        footer.setSpacing(10)
         self.page_label = QLabel("0 case")
         self.page_label.setObjectName("Muted")
 
@@ -219,7 +220,10 @@ class Panel117(QWidget):
         footer.addWidget(self.btn_previous)
         footer.addWidget(self.btn_next)
         footer.addWidget(self.btn_open_case)
-        root.addLayout(footer)
+        cases_lay.addLayout(footer)
+
+        root.addWidget(cases_card)
+        root.addStretch()
 
         self.btn_run.clicked.connect(self.run)
         self.btn_reset.clicked.connect(self.reset)
@@ -228,6 +232,7 @@ class Panel117(QWidget):
         self.btn_open_case.clicked.connect(self._open_selected_case)
         self.search_button.clicked.connect(self._apply_search)
         self.search_input.returnPressed.connect(self._apply_search)
+        self.search_input.textChanged.connect(self._on_search_text_changed)
         self.summary.itemSelectionChanged.connect(self._select_answer)
         self.cases.itemSelectionChanged.connect(self._sync_open_button)
         self.cases.cellDoubleClicked.connect(
@@ -376,6 +381,7 @@ class Panel117(QWidget):
         self.page = 0
         self.summary.setRowCount(0)
         self.cases.setRowCount(0)
+        fit_table_height(self.cases, 0, min_rows=5, max_rows=7, row_height=40, header_height=44)
         self.search_input.clear()
         self.rule_label.setText(
             "Pilih baris A–E untuk melihat aturan dan daftar case."
@@ -423,6 +429,10 @@ class Panel117(QWidget):
         self.page = 0
         self._apply_search()
 
+    def _on_search_text_changed(self, text: str):
+        if not text.strip() and self.current_answer is not None:
+            self._apply_search()
+
     def _apply_search(self):
         if self.current_answer is None:
             return
@@ -445,6 +455,7 @@ class Panel117(QWidget):
         visible = self.filtered_cases[start:start + PAGE_SIZE]
 
         self.cases.setRowCount(len(visible))
+        fit_table_height(self.cases, len(visible), min_rows=5, max_rows=7, row_height=40, header_height=44)
         for row, case in enumerate(visible):
             case_item = QTableWidgetItem(case.case_id)
             duration_item = QTableWidgetItem(f"{case.days:.4f}")
@@ -453,6 +464,10 @@ class Panel117(QWidget):
             )
             self.cases.setItem(row, 0, case_item)
             self.cases.setItem(row, 1, duration_item)
+
+        self.cases.clearSelection()
+        self.cases.scrollToTop()
+        self.cases.verticalScrollBar().setValue(0)
 
         if total:
             first = start + 1
@@ -518,9 +533,7 @@ class Panel117(QWidget):
         layout = QVBoxLayout(dialog)
 
         heading = QLabel(case_id)
-        heading.setStyleSheet(
-            "font-size: 14pt; font-weight: 700; color: #17243A;"
-        )
+        heading.setObjectName("SectionTitle")
         layout.addWidget(heading)
 
         meta = QLabel(
@@ -541,17 +554,7 @@ class Panel117(QWidget):
                 for column in columns
             ]
         )
-        table.setEditTriggers(
-            QAbstractItemView.EditTrigger.NoEditTriggers
-        )
-        table.setSelectionBehavior(
-            QAbstractItemView.SelectionBehavior.SelectRows
-        )
-        table.setAlternatingRowColors(True)
-        table.verticalHeader().setVisible(False)
-        table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch
-        )
+        configure_table(table, min_rows=5, row_height=38, header_height=42)
         table.setRowCount(len(events))
 
         for row_index, (_, event) in enumerate(events.iterrows()):

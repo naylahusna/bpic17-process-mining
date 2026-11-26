@@ -1,19 +1,26 @@
 from pathlib import Path
 import sys
 
+import pandas as pd
+
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QFrame, QLabel, QPushButton,
     QVBoxLayout, QHBoxLayout, QGridLayout,
     QTableWidget, QTableWidgetItem, QHeaderView,
     QAbstractItemView, QFileDialog, QMessageBox,
-    QProgressBar, QStackedWidget
+    QProgressBar, QScrollArea, QStackedWidget, QInputDialog
 )
 
 from anggota1.importer import load_xes
 from anggota1.overview import build_overview
+from anggota4.columns import CASE, ACT, TS
+from anggota4.case_explorer import CaseExplorerWidget
 from anggota4.panel_11_22 import Panel1122
 from exercise_11_7.panel_qt import Panel117
+from src.gui.panel_11_15 import Panel1115
+from src.gui.panel_11_18 import Panel1118
+from anggota1.theme import build_stylesheet, configure_table
 
 
 class DatasetWorker(QThread):
@@ -51,6 +58,8 @@ class MainWindow(QMainWindow):
 
         self.metric_values = {}
         self.nav_buttons = {}
+        self.page_scrolls = {}
+        self.export_cards = {}
 
         self._build_ui()
         self._apply_style()
@@ -122,6 +131,8 @@ class MainWindow(QMainWindow):
 
         cards = QGridLayout()
         cards.setSpacing(15)
+        for col in range(4):
+            cards.setColumnStretch(col, 1)
 
         self._add_metric(
             cards, 0, 0, "TOTAL CASES", "—", "Unique process cases"
@@ -142,6 +153,8 @@ class MainWindow(QMainWindow):
         range_card = QFrame()
         range_card.setObjectName("Card")
         range_layout = QVBoxLayout(range_card)
+        range_layout.setContentsMargins(18, 14, 18, 14)
+        range_layout.setSpacing(4)
 
         range_title = QLabel("PROCESS TIME RANGE")
         range_title.setObjectName("SectionTitle")
@@ -164,6 +177,15 @@ class MainWindow(QMainWindow):
         self.activity_table = activity_card.findChild(
             QTableWidget, "DataTable"
         )
+        self.activity_table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.Stretch
+        )
+        self.activity_table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.ResizeMode.ResizeToContents
+        )
+        self.activity_table.horizontalHeader().setSectionResizeMode(
+            2, QHeaderView.ResizeMode.ResizeToContents
+        )
 
         case_card = self._build_table_card(
             "LONGEST CASE DURATIONS",
@@ -172,6 +194,14 @@ class MainWindow(QMainWindow):
         self.case_table = case_card.findChild(
             QTableWidget, "DataTable"
         )
+        self.case_table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.Stretch
+        )
+        for col_idx in (1, 2, 3):
+            self.case_table.horizontalHeader().setSectionResizeMode(
+                col_idx, QHeaderView.ResizeMode.ResizeToContents
+            )
+        self.case_table.cellDoubleClicked.connect(self._open_overview_case)
 
         tables_layout.addWidget(activity_card, 1)
         tables_layout.addWidget(case_card, 1)
@@ -183,22 +213,57 @@ class MainWindow(QMainWindow):
         self.status_label.setObjectName("Muted")
         overview_layout.addWidget(self.status_label)
 
-        self.pages.addWidget(self.overview_page)
+        self.page_scrolls["overview"] = self._wrap_scroll(self.overview_page)
+        self.pages.addWidget(self.page_scrolls["overview"])
 
         # PAGE 2: EXERCISE 11.7 (NAYLA, PySide6 adapter)
         self.panel_117 = Panel117()
-        self.pages.addWidget(self.panel_117)
+        self.page_scrolls["11.7"] = self._wrap_scroll(self.panel_117)
+        self.pages.addWidget(self.page_scrolls["11.7"])
 
-        # PAGE 3: EXERCISE 11.22 (GALANG)
+        # PAGE 3: EXERCISE 11.15 (ANGGOTA 3)
+        self.panel_1115 = Panel1115()
+        self.page_scrolls["11.15"] = self._wrap_scroll(self.panel_1115)
+        self.pages.addWidget(self.page_scrolls["11.15"])
+
+        # PAGE 4: EXERCISE 11.18 (ANGGOTA 3)
+        self.panel_1118 = Panel1118()
+        self.page_scrolls["11.18"] = self._wrap_scroll(self.panel_1118)
+        self.pages.addWidget(self.page_scrolls["11.18"])
+
+        # PAGE 5: EXERCISE 11.22 (ANGGOTA 4)
         self.panel_1122 = Panel1122()
-        self.panel_1122.btn_run.setObjectName("PrimaryButton")
-        self.panel_1122.btn_reset.setObjectName("SecondaryButton")
-        self.pages.addWidget(self.panel_1122)
+        self.page_scrolls["11.22"] = self._wrap_scroll(self.panel_1122)
+        self.pages.addWidget(self.page_scrolls["11.22"])
 
-        self.pages.setCurrentWidget(self.overview_page)
+        # PAGE 6: GLOBAL CASE EXPLORER
+        self.case_explorer = CaseExplorerWidget()
+        self.case_explorer.set_cases(
+            pd.DataFrame(columns=["Case ID", "Events", "Start", "End", "Duration (days)"]),
+            {}
+        )
+        self.page_scrolls["cases"] = self._wrap_scroll(self.case_explorer)
+        self.pages.addWidget(self.page_scrolls["cases"])
+
+        # PAGE 7: EXPORT CSV
+        self.export_page = self._build_export_page()
+        self.page_scrolls["export"] = self._wrap_scroll(self.export_page)
+        self.pages.addWidget(self.page_scrolls["export"])
+
+        self.pages.setCurrentWidget(self.page_scrolls["overview"])
         content_layout.addWidget(self.pages, 1)
 
         root.addWidget(content, 1)
+
+    @staticmethod
+    def _wrap_scroll(widget: QWidget) -> QScrollArea:
+        """Wrap a page widget in a single vertical QScrollArea with widgetResizable=True."""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setWidget(widget)
+        return scroll
 
     # --------------------------------------------------
     # SIDEBAR
@@ -246,8 +311,14 @@ class MainWindow(QMainWindow):
             layout, "Exercise 11.7", True, False,
             lambda: self.show_page("11.7")
         )
-        self._add_nav(layout, "Exercise 11.15", False)
-        self._add_nav(layout, "Exercise 11.18", False)
+        self._add_nav(
+            layout, "Exercise 11.15", True, False,
+            lambda: self.show_page("11.15")
+        )
+        self._add_nav(
+            layout, "Exercise 11.18", True, False,
+            lambda: self.show_page("11.18")
+        )
         self._add_nav(
             layout, "Exercise 11.22", True, False,
             lambda: self.show_page("11.22")
@@ -259,8 +330,14 @@ class MainWindow(QMainWindow):
         tools_section.setObjectName("SidebarSection")
         layout.addWidget(tools_section)
 
-        self._add_nav(layout, "Case Explorer", False)
-        self._add_nav(layout, "Export CSV", False)
+        self._add_nav(
+            layout, "Case Explorer", True, False,
+            lambda: self.show_page("cases")
+        )
+        self._add_nav(
+            layout, "Export CSV", True, False,
+            lambda: self.show_page("export")
+        )
 
         layout.addStretch()
 
@@ -295,32 +372,61 @@ class MainWindow(QMainWindow):
         return button
 
     def show_page(self, page):
-        if page == "overview":
-            self.pages.setCurrentWidget(self.overview_page)
-            self.page_title.setText("Overview Dashboard")
-            self.page_subtitle.setText(
-                "Business Process Intelligence | BPI Challenge 2017"
-            )
-            selected = "Overview"
+        pages = {
+            "overview": (
+                self.page_scrolls["overview"],
+                "Overview Dashboard",
+                "Business Process Intelligence | BPI Challenge 2017",
+                "Overview",
+            ),
+            "11.7": (
+                self.page_scrolls["11.7"],
+                "Exercise 11.7",
+                "Case Analysis | Case Count and Cycle Time",
+                "Exercise 11.7",
+            ),
+            "11.15": (
+                self.page_scrolls["11.15"],
+                "Exercise 11.15",
+                "Repeated Complete | W_Assess Potential Fraud",
+                "Exercise 11.15",
+            ),
+            "11.18": (
+                self.page_scrolls["11.18"],
+                "Exercise 11.18",
+                "Same Resource | W_Assess Potential Fraud",
+                "Exercise 11.18",
+            ),
+            "11.22": (
+                self.page_scrolls["11.22"],
+                "Exercise 11.22",
+                "Ordering Analysis | O_Cancelled before O_Accepted",
+                "Exercise 11.22",
+            ),
+            "cases": (
+                self.page_scrolls["cases"],
+                "Case Explorer",
+                "Browse all cases and inspect their event timelines",
+                "Case Explorer",
+            ),
+            "export": (
+                self.page_scrolls["export"],
+                "Export CSV",
+                "Ekspor hasil analisis dan Case Register ke file CSV (UTF-8 BOM)",
+                "Export CSV",
+            ),
+        }
 
-        elif page == "11.7":
-            self.pages.setCurrentWidget(self.panel_117)
-            self.page_title.setText("Exercise 11.7")
-            self.page_subtitle.setText(
-                "Case Analysis | Case Count and Cycle Time"
-            )
-            selected = "Exercise 11.7"
-
-        elif page == "11.22":
-            self.pages.setCurrentWidget(self.panel_1122)
-            self.page_title.setText("Exercise 11.22")
-            self.page_subtitle.setText(
-                "Ordering Analysis | O_Cancelled before O_Accepted"
-            )
-            selected = "Exercise 11.22"
-
-        else:
+        config = pages.get(page)
+        if config is None:
             return
+
+        widget, title, subtitle, selected = config
+        if page == "export":
+            self._refresh_export_cards()
+        self.pages.setCurrentWidget(widget)
+        self.page_title.setText(title)
+        self.page_subtitle.setText(subtitle)
 
         for name, button in self.nav_buttons.items():
             button.setChecked(name == selected)
@@ -373,26 +479,9 @@ class MainWindow(QMainWindow):
         table = QTableWidget(0, len(headers))
         table.setObjectName("DataTable")
         table.setHorizontalHeaderLabels(headers)
+        configure_table(table, min_rows=5, row_height=38, header_height=42)
 
-        table.setEditTriggers(
-            QAbstractItemView.EditTrigger.NoEditTriggers
-        )
-        table.setSelectionBehavior(
-            QAbstractItemView.SelectionBehavior.SelectRows
-        )
-        table.setSelectionMode(
-            QAbstractItemView.SelectionMode.SingleSelection
-        )
-        table.setAlternatingRowColors(True)
-        table.verticalHeader().setVisible(False)
-
-        table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch
-        )
-
-        table.setMinimumHeight(270)
-
-        layout.addWidget(table)
+        layout.addWidget(table, 1)
 
         return card
 
@@ -442,9 +531,16 @@ class MainWindow(QMainWindow):
         self.active_log = imported.dataframe
         self.active_overview = overview
 
-        # Teruskan DataFrame aktif ke panel Exercise 11.22.
+        # Satu event log aktif dibagikan ke seluruh modul.
         self.panel_117.set_log(self.active_log)
+        self.panel_1115.set_log(self.active_log)
+        self.panel_1118.set_log(self.active_log)
         self.panel_1122.set_log(self.active_log)
+
+        # Case Explorer global menampilkan seluruh case, bukan hanya case
+        # yang lolos salah satu filter exercise.
+        self.case_explorer.set_log(self.active_log)
+        self.case_explorer.set_cases(self._build_case_register(), {})
 
         self.file_label.setText(
             f"Loaded dataset: {Path(imported.source_path).name}"
@@ -485,6 +581,7 @@ class MainWindow(QMainWindow):
             f"{overview.total_cases:,} cases | "
             f"{overview.total_events:,} events"
         )
+        self._refresh_export_cards()
 
     def _populate_activity_table(self, overview):
         data = overview.activity_frequency.head(10)
@@ -528,6 +625,450 @@ class MainWindow(QMainWindow):
                     row, col, QTableWidgetItem(value)
                 )
 
+    def _open_overview_case(self, row: int, _column: int):
+        """Double-click case di Overview untuk membuka detail di Case Explorer."""
+        item = self.case_table.item(row, 0)
+        if item is None:
+            return
+        case_id = item.text()
+        self.show_page("cases")
+        if not self.case_explorer.select_case(case_id):
+            QMessageBox.information(
+                self,
+                "Case Explorer",
+                f"Case {case_id} tidak ditemukan pada dataset aktif.",
+            )
+
+    # --------------------------------------------------
+    # GLOBAL CASE REGISTER & CSV EXPORT
+    # --------------------------------------------------
+
+    def _build_case_register(self) -> pd.DataFrame:
+        """Membuat daftar seluruh case dari dataset aktif untuk Case Explorer."""
+        if self.active_log is None or self.active_log.empty:
+            return pd.DataFrame(
+                columns=["Case ID", "Events", "Start", "End", "Duration (days)"]
+            )
+
+        grouped = (
+            self.active_log.groupby(CASE, sort=False, observed=True)
+            .agg(
+                Events=(ACT, "size"),
+                Start=(TS, "min"),
+                End=(TS, "max"),
+            )
+            .reset_index()
+        )
+        grouped["Duration (days)"] = (
+            grouped["End"] - grouped["Start"]
+        ).dt.total_seconds() / 86400
+
+        grouped = grouped.rename(columns={CASE: "Case ID"})
+        grouped["Case ID"] = grouped["Case ID"].astype(str)
+        grouped["Start"] = grouped["Start"].dt.strftime("%Y-%m-%d %H:%M:%S")
+        grouped["End"] = grouped["End"].dt.strftime("%Y-%m-%d %H:%M:%S")
+        grouped["Duration (days)"] = grouped["Duration (days)"].round(4)
+        return grouped.sort_values("Case ID", kind="mergesort").reset_index(drop=True)
+
+    def _available_export_options(self):
+        options = ["Case Register — seluruh case"]
+        if self.panel_117.answers:
+            options.append("Exercise 11.7 — seluruh butir A–E")
+        if self.panel_1115.result is not None:
+            options.append("Exercise 11.15 — Repeated Complete")
+        if self.panel_1118.result is not None:
+            options.append("Exercise 11.18 — Same Resource")
+        if self.panel_1122.result is not None:
+            options.append("Exercise 11.22 — Ordering Analysis")
+
+        analysis_options = options[1:]
+        if len(analysis_options) > 1:
+            options.append("Semua hasil analisis — gabungan")
+        return options
+
+    @staticmethod
+    def _summary_record(summary: dict) -> dict:
+        row = {"record_type": "summary"}
+        row.update(summary)
+        return row
+
+    def _export_frame_for(self, option: str) -> pd.DataFrame:
+        """Mengubah hasil modul terpilih menjadi satu tabel CSV yang konsisten."""
+        rows = []
+
+        if option == "Case Register — seluruh case":
+            register = self._build_case_register()
+            if register.empty:
+                return register
+            return register.rename(columns={
+                "Case ID": "case_id",
+                "Events": "event_count",
+                "Start": "start_time",
+                "End": "end_time",
+                "Duration (days)": "duration_days",
+            })
+
+        include_all = option == "Semua hasil analisis — gabungan"
+
+        if include_all or option.startswith("Exercise 11.7"):
+            for answer in self.panel_117.answers:
+                summary = {
+                    "exercise": "11.7",
+                    "item": answer.code,
+                    "question": answer.title,
+                    "rule": answer.rule,
+                    "case_count": answer.count,
+                    "mean_cycle_time_days": (
+                        round(answer.mean_days, 6)
+                        if answer.mean_days is not None else None
+                    ),
+                }
+                rows.append(self._summary_record(summary))
+                for case in answer.cases:
+                    rows.append({
+                        "record_type": "case",
+                        "exercise": "11.7",
+                        "item": answer.code,
+                        "case_id": case.case_id,
+                        "duration_days": case.days,
+                    })
+
+        if include_all or option.startswith("Exercise 11.15"):
+            result = self.panel_1115.result
+            if result is not None:
+                rows.append(self._summary_record(result.summary_dict()))
+                case_df = result.summary_df.rename(columns={
+                    CASE: "case_id",
+                    "complete_count": "complete_count",
+                })
+                for record in case_df.to_dict("records"):
+                    rows.append({
+                        "record_type": "case",
+                        "exercise": "11.15",
+                        **record,
+                    })
+
+        if include_all or option.startswith("Exercise 11.18"):
+            result = self.panel_1118.result
+            if result is not None:
+                rows.append(self._summary_record(result.summary_dict()))
+                case_df = result.summary_df.rename(columns={
+                    CASE: "case_id",
+                    "resource_id": "resource_id",
+                    "complete_count": "complete_count",
+                })
+                for record in case_df.to_dict("records"):
+                    rows.append({
+                        "record_type": "case",
+                        "exercise": "11.18",
+                        **record,
+                    })
+
+        if include_all or option.startswith("Exercise 11.22"):
+            result = self.panel_1122.result
+            if result is not None:
+                rows.append(self._summary_record(result.summary_dict()))
+                ev = result.evidence.copy().rename(columns={
+                    CASE: "case_id",
+                    "first_pos": "pos_O_Cancelled",
+                    "second_pos": "pos_O_Accepted",
+                    "first_ts": "ts_O_Cancelled",
+                    "second_ts": "ts_O_Accepted",
+                })
+                if "pos_O_Cancelled" in ev:
+                    ev["pos_O_Cancelled"] = ev["pos_O_Cancelled"] + 1
+                if "pos_O_Accepted" in ev:
+                    ev["pos_O_Accepted"] = ev["pos_O_Accepted"] + 1
+                if "ts_O_Cancelled" in ev:
+                    ev["ts_O_Cancelled"] = ev["ts_O_Cancelled"].dt.strftime("%Y-%m-%d %H:%M:%S")
+                if "ts_O_Accepted" in ev:
+                    ev["ts_O_Accepted"] = ev["ts_O_Accepted"].dt.strftime("%Y-%m-%d %H:%M:%S")
+                for record in ev.to_dict("records"):
+                    rows.append({
+                        "record_type": "case",
+                        "exercise": "11.22",
+                        **record,
+                    })
+
+        return pd.DataFrame(rows)
+
+    def _build_export_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(14)
+
+        self.export_feedback = QLabel(
+            "Pilih hasil analisis atau Case Register di bawah ini untuk diekspor ke CSV (UTF-8 BOM untuk Microsoft Excel)."
+        )
+        self.export_feedback.setObjectName("InfoText")
+        self.export_feedback.setWordWrap(True)
+        layout.addWidget(self.export_feedback)
+
+        specs = [
+            ("register", "Case Register — Seluruh Case", "Daftar seluruh case pada dataset aktif beserta jumlah event, waktu mulai/selesai, dan durasi.", "Case Register — seluruh case", "bpic17_case_register.csv"),
+            ("11.7", "Exercise 11.7 — Case Count & Cycle Time", "Ringkasan dan daftar case untuk seluruh butir A–E.", "Exercise 11.7 — seluruh butir A–E", "bpic17_exercise_11_7.csv"),
+            ("11.15", "Exercise 11.15 — Repeated Complete", "Case dengan aktivitas W_Assess Potential Fraud berstatus complete minimal 2 kali.", "Exercise 11.15 — Repeated Complete", "bpic17_exercise_11_15.csv"),
+            ("11.18", "Exercise 11.18 — Same Resource", "Case dengan minimal 2 complete W_Assess Potential Fraud oleh resource yang sama.", "Exercise 11.18 — Same Resource", "bpic17_exercise_11_18.csv"),
+            ("11.22", "Exercise 11.22 — Ordering Analysis", "Case dengan urutan O_Cancelled sebelum O_Accepted beserta posisi dan timestamp.", "Exercise 11.22 — Ordering Analysis", "bpic17_exercise_11_22.csv"),
+            ("all", "Semua Hasil Analisis (Gabungan)", "Menggabungkan seluruh hasil Exercise yang sudah dijalankan ke dalam satu file CSV.", "Semua hasil analisis — gabungan", "bpic17_semua_hasil_analisis.csv"),
+        ]
+
+        for key, title, desc, option_name, default_file in specs:
+            card = QFrame()
+            card.setObjectName("Card")
+            card_lay = QHBoxLayout(card)
+            card_lay.setContentsMargins(18, 14, 18, 14)
+            card_lay.setSpacing(14)
+
+            text_col = QVBoxLayout()
+            text_col.setSpacing(4)
+            lbl_title = QLabel(title)
+            lbl_title.setObjectName("SectionTitle")
+            lbl_desc = QLabel(desc)
+            lbl_desc.setObjectName("Muted")
+            lbl_desc.setWordWrap(True)
+            lbl_status = QLabel("Belum tersedia")
+            lbl_status.setObjectName("Muted")
+
+            text_col.addWidget(lbl_title)
+            text_col.addWidget(lbl_desc)
+            text_col.addWidget(lbl_status)
+
+            btn = QPushButton("Export CSV")
+            btn.setObjectName("PrimaryButton")
+            btn.setEnabled(False)
+            btn.clicked.connect(
+                lambda _checked=False, opt=option_name, fn=default_file: self._export_option(opt, fn)
+            )
+
+            card_lay.addLayout(text_col, 1)
+            card_lay.addWidget(btn)
+            layout.addWidget(card)
+            self.export_cards[key] = (lbl_status, btn)
+
+        layout.addStretch()
+        return page
+
+    def _refresh_export_cards(self):
+        if not self.export_cards:
+            return
+        has_log = self.active_log is not None
+        dataset_name = (
+            Path(self.active_import.source_path).name
+            if self.active_import is not None
+            else "—"
+        )
+
+        # Register
+        reg_lbl, reg_btn = self.export_cards["register"]
+        if has_log and self.active_overview is not None:
+            reg_lbl.setText(f"Dataset: {dataset_name}  |  {self.active_overview.total_cases:,} case siap diekspor")
+            reg_btn.setEnabled(True)
+        else:
+            reg_lbl.setText("Impor dataset XES terlebih dahulu.")
+            reg_btn.setEnabled(False)
+
+        # 11.7
+        lbl_117, btn_117 = self.export_cards["11.7"]
+        if has_log and self.panel_117.answers:
+            total_117 = sum(a.count for a in self.panel_117.answers)
+            lbl_117.setText(f"Dataset: {dataset_name}  |  5 butir (A–E) selesai dianalisis ({total_117:,} entri case)")
+            btn_117.setEnabled(True)
+        else:
+            lbl_117.setText("Jalankan analisis Exercise 11.7 terlebih dahulu.")
+            btn_117.setEnabled(False)
+
+        # 11.15
+        lbl_1115, btn_1115 = self.export_cards["11.15"]
+        if has_log and self.panel_1115.result is not None:
+            r15 = self.panel_1115.result
+            lbl_1115.setText(f"Dataset: {dataset_name}  |  {r15.matched_count:,} dari {r15.total_cases:,} case ({r15.percentage:.2f}%)")
+            btn_1115.setEnabled(True)
+        else:
+            lbl_1115.setText("Jalankan analisis Exercise 11.15 terlebih dahulu.")
+            btn_1115.setEnabled(False)
+
+        # 11.18
+        lbl_1118, btn_1118 = self.export_cards["11.18"]
+        if has_log and self.panel_1118.result is not None:
+            r18 = self.panel_1118.result
+            lbl_1118.setText(f"Dataset: {dataset_name}  |  {r18.matched_count:,} dari {r18.total_cases:,} case ({r18.percentage:.2f}%)")
+            btn_1118.setEnabled(True)
+        else:
+            lbl_1118.setText("Jalankan analisis Exercise 11.18 terlebih dahulu.")
+            btn_1118.setEnabled(False)
+
+        # 11.22
+        lbl_1122, btn_1122 = self.export_cards["11.22"]
+        if has_log and self.panel_1122.result is not None:
+            r22 = self.panel_1122.result
+            lbl_1122.setText(f"Dataset: {dataset_name}  |  {r22.matched_count:,} dari {r22.total_cases:,} case ({r22.percentage:.2f}%)")
+            btn_1122.setEnabled(True)
+        else:
+            lbl_1122.setText("Jalankan analisis Exercise 11.22 terlebih dahulu.")
+            btn_1122.setEnabled(False)
+
+        # Combined
+        ready_count = sum(
+            1 for flag in (
+                bool(self.panel_117.answers),
+                self.panel_1115.result is not None,
+                self.panel_1118.result is not None,
+                self.panel_1122.result is not None,
+            ) if flag
+        )
+        lbl_all, btn_all = self.export_cards["all"]
+        if has_log and ready_count > 1:
+            lbl_all.setText(f"Dataset: {dataset_name}  |  {ready_count} modul analisis siap digabung")
+            btn_all.setEnabled(True)
+        else:
+            lbl_all.setText("Jalankan minimal 2 modul analisis untuk mengekspor gabungan.")
+            btn_all.setEnabled(False)
+
+    def _export_option(self, option: str, default_name: str):
+        if self.active_log is None:
+            QMessageBox.information(
+                self,
+                "Export CSV",
+                "Impor dataset XES terlebih dahulu sebelum melakukan ekspor.",
+            )
+            return
+        frame = self._export_frame_for(option)
+        if frame.empty:
+            QMessageBox.warning(
+                self,
+                "Export CSV",
+                "Belum ada data hasil analisis untuk pilihan tersebut.",
+            )
+            return
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Simpan hasil CSV",
+            default_name,
+            "CSV Files (*.csv)",
+        )
+        if not file_path:
+            return
+        if not file_path.lower().endswith(".csv"):
+            file_path += ".csv"
+
+        try:
+            frame.to_csv(file_path, index=False, encoding="utf-8-sig")
+        except Exception as exc:
+            if hasattr(self, "export_feedback"):
+                self.export_feedback.setText(f"Gagal mengekspor CSV: {type(exc).__name__}: {exc}")
+            QMessageBox.critical(
+                self,
+                "Export gagal",
+                f"Gagal menyimpan CSV:\n{type(exc).__name__}: {exc}",
+            )
+            return
+
+        if hasattr(self, "export_feedback"):
+            self.export_feedback.setText(
+                f"Berhasil diekspor: {file_path} ({len(frame):,} baris)"
+            )
+        QMessageBox.information(
+            self,
+            "Export berhasil",
+            f"File CSV berhasil disimpan:\n{file_path}\n\nJumlah baris: {len(frame):,}",
+        )
+
+    def _active_module_export_target(self):
+        """Return (option_name, default_filename, empty_warning) for the active page, or None to prompt."""
+        current = self.pages.currentWidget()
+        if current is self.page_scrolls.get("11.7"):
+            if not self.panel_117.answers:
+                return None, "bpic17_exercise_11_7.csv", "Belum ada hasil analisis Exercise 11.7. Jalankan analisis terlebih dahulu."
+            return "Exercise 11.7 — seluruh butir A–E", "bpic17_exercise_11_7.csv", None
+        if current is self.page_scrolls.get("11.15"):
+            if self.panel_1115.export_payload() is None:
+                return None, "bpic17_exercise_11_15.csv", "Belum ada hasil analisis Exercise 11.15. Jalankan analisis terlebih dahulu."
+            return "Exercise 11.15 — Repeated Complete", "bpic17_exercise_11_15.csv", None
+        if current is self.page_scrolls.get("11.18"):
+            if self.panel_1118.export_payload() is None:
+                return None, "bpic17_exercise_11_18.csv", "Belum ada hasil analisis Exercise 11.18. Jalankan analisis terlebih dahulu."
+            return "Exercise 11.18 — Same Resource", "bpic17_exercise_11_18.csv", None
+        if current is self.page_scrolls.get("11.22"):
+            if self.panel_1122.export_payload() is None:
+                return None, "bpic17_exercise_11_22.csv", "Belum ada hasil analisis Exercise 11.22. Jalankan analisis terlebih dahulu."
+            return "Exercise 11.22 — Ordering Analysis", "bpic17_exercise_11_22.csv", None
+        return None, None, None
+
+    def export_csv(self):
+        """Ekspor hasil modul aktif atau pilih dataset/analisis ke CSV."""
+        if self.active_log is None:
+            QMessageBox.information(
+                self,
+                "Export CSV",
+                "Impor dataset XES terlebih dahulu sebelum melakukan ekspor.",
+            )
+            return
+
+        selected, default_name, warning_msg = self._active_module_export_target()
+        if warning_msg is not None:
+            QMessageBox.warning(self, "Export CSV", warning_msg)
+            return
+
+        if selected is None:
+            options = self._available_export_options()
+            if len(options) == 1:
+                selected = options[0]
+            else:
+                selected, accepted = QInputDialog.getItem(
+                    self,
+                    "Export CSV",
+                    "Pilih data yang ingin diekspor:",
+                    options,
+                    0,
+                    False,
+                )
+                if not accepted:
+                    return
+
+        frame = self._export_frame_for(selected)
+        if frame.empty:
+            QMessageBox.warning(
+                self,
+                "Export CSV",
+                "Belum ada data hasil analisis untuk pilihan tersebut.",
+            )
+            return
+
+        if not default_name:
+            suggested = selected.lower().replace(" ", "_").replace("—", "-")
+            suggested = "".join(ch if ch.isalnum() or ch in "_-" else "_" for ch in suggested)
+            default_name = f"{suggested}.csv"
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Simpan hasil CSV",
+            default_name,
+            "CSV Files (*.csv)",
+        )
+        if not file_path:
+            return
+        if not file_path.lower().endswith(".csv"):
+            file_path += ".csv"
+
+        try:
+            frame.to_csv(file_path, index=False, encoding="utf-8-sig")
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                "Export gagal",
+                f"Gagal menyimpan CSV:\\n{type(exc).__name__}: {exc}",
+            )
+            return
+
+        QMessageBox.information(
+            self,
+            "Export berhasil",
+            f"File CSV berhasil disimpan:\\n{file_path}\\n\\nJumlah baris: {len(frame):,}",
+        )
+
     # --------------------------------------------------
     # ERROR HANDLING
     # --------------------------------------------------
@@ -558,8 +1099,17 @@ class MainWindow(QMainWindow):
         analysis_117_running = (
             worker_117 is not None and worker_117.isRunning()
         )
+        worker_1115 = getattr(self.panel_1115, "_worker", None)
+        analysis_1115_running = (
+            worker_1115 is not None and worker_1115.isRunning()
+        )
+        worker_1118 = getattr(self.panel_1118, "_worker", None)
+        analysis_1118_running = (
+            worker_1118 is not None and worker_1118.isRunning()
+        )
 
-        if import_running or analysis_running or analysis_117_running:
+        if (import_running or analysis_running or analysis_117_running
+                or analysis_1115_running or analysis_1118_running):
             QMessageBox.warning(
                 self,
                 "Processing",
@@ -574,297 +1124,4 @@ class MainWindow(QMainWindow):
     # --------------------------------------------------
 
     def _apply_style(self):
-        self.setStyleSheet("""
-            QMainWindow, QWidget {
-                background-color: #F4F7FB;
-                color: #17243A;
-                font-family: "Segoe UI";
-                font-size: 10pt;
-            }
-
-            QLabel {
-                background-color: transparent;
-                color: #17243A;
-            }
-
-            QFrame#Sidebar {
-                background-color: #142238;
-                border: none;
-            }
-
-            QLabel#Brand {
-                background-color: transparent;
-                color: #FFFFFF;
-                font-size: 16pt;
-                font-weight: 800;
-                padding: 2px 0;
-            }
-
-            QLabel#BrandSubtitle {
-                background-color: transparent;
-                color: #8FA8C5;
-                font-size: 8pt;
-                font-weight: 600;
-                letter-spacing: 2px;
-            }
-
-            QLabel#SidebarSection {
-                background-color: transparent;
-                color: #8FA8C5;
-                font-size: 8pt;
-                font-weight: 700;
-                padding: 8px 4px 5px 4px;
-            }
-
-            QLabel#SidebarFooter {
-                background-color: transparent;
-                color: #8298B3;
-                font-size: 8pt;
-                padding-top: 12px;
-            }
-
-            QPushButton {
-                background-color: #E7EDF5;
-                color: #263A52;
-                border: 1px solid #D4DEEA;
-                border-radius: 8px;
-                padding: 9px 14px;
-                font-weight: 600;
-                min-height: 18px;
-            }
-
-            QPushButton:hover:enabled {
-                background-color: #DCE7F3;
-                border-color: #B8C9DC;
-            }
-
-            QPushButton:pressed:enabled {
-                background-color: #CFDDED;
-            }
-
-            QPushButton:disabled {
-                background-color: #E9EDF2;
-                color: #9AA8B8;
-                border-color: #E1E6EC;
-            }
-
-            QPushButton#NavButton {
-                background-color: transparent;
-                color: #C7D3E2;
-                border: 1px solid transparent;
-                border-radius: 7px;
-                text-align: left;
-                padding: 10px 12px;
-                font-weight: 500;
-            }
-
-            QPushButton#NavButton:checked {
-                background-color: #2D5B89;
-                color: #FFFFFF;
-                border: 1px solid #416F9D;
-                font-weight: 700;
-            }
-
-            QPushButton#NavButton:hover:enabled:!checked {
-                background-color: #21364F;
-                color: #FFFFFF;
-            }
-
-            QPushButton#NavButton:disabled {
-                background-color: transparent;
-                color: #71849D;
-                border-color: transparent;
-            }
-
-            QPushButton#PrimaryButton {
-                background-color: #2867B2;
-                color: #FFFFFF;
-                border: 1px solid #2867B2;
-                border-radius: 8px;
-                padding: 11px 19px;
-                font-weight: 700;
-            }
-
-            QPushButton#PrimaryButton:hover:enabled {
-                background-color: #1F5596;
-                border-color: #1F5596;
-            }
-
-            QPushButton#PrimaryButton:pressed:enabled {
-                background-color: #19477E;
-            }
-
-            QPushButton#PrimaryButton:disabled {
-                background-color: #A9BDD3;
-                color: #F5F8FC;
-                border-color: #A9BDD3;
-            }
-
-            QPushButton#SecondaryButton {
-                background-color: #FFFFFF;
-                color: #2B4B6C;
-                border: 1px solid #C9D6E4;
-            }
-
-            QPushButton#SecondaryButton:hover:enabled {
-                background-color: #EEF4FA;
-                border-color: #9FB5CC;
-            }
-
-            QLabel#PageTitle {
-                background-color: transparent;
-                color: #17243A;
-                font-size: 23pt;
-                font-weight: 800;
-            }
-
-            QLabel#Muted {
-                background-color: transparent;
-                color: #74839A;
-                font-size: 9pt;
-            }
-
-            QLabel#FileInfo {
-                background-color: #E6EDF6;
-                color: #36577F;
-                border: 1px solid #D9E4F0;
-                border-radius: 8px;
-                padding: 10px 12px;
-            }
-
-            QFrame#MetricCard, QFrame#Card {
-                background-color: #FFFFFF;
-                border: 1px solid #E1E8F0;
-                border-radius: 10px;
-            }
-
-            QLabel#MetricTitle {
-                background-color: transparent;
-                color: #74839A;
-                font-size: 9pt;
-                font-weight: 700;
-            }
-
-            QLabel#MetricValue {
-                background-color: transparent;
-                color: #17243A;
-                font-size: 22pt;
-                font-weight: 800;
-            }
-
-            QLabel#SectionTitle {
-                background-color: transparent;
-                color: #34465F;
-                font-size: 10pt;
-                font-weight: 700;
-            }
-
-            QLabel#RangeValue {
-                background-color: transparent;
-                color: #2867B2;
-                font-size: 12pt;
-                font-weight: 700;
-            }
-
-            QLabel#InfoText {
-                background-color: #EEF4FA;
-                color: #334B66;
-                border: 1px solid #DCE6F0;
-                border-radius: 8px;
-                padding: 10px;
-            }
-
-            QLineEdit {
-                background-color: #FFFFFF;
-                color: #17243A;
-                border: 1px solid #CFD9E5;
-                border-radius: 8px;
-                padding: 9px 11px;
-                selection-background-color: #2867B2;
-                selection-color: #FFFFFF;
-            }
-
-            QLineEdit:focus {
-                border: 1px solid #2867B2;
-            }
-
-            QTableWidget#DataTable, QTableView {
-                background-color: #FFFFFF;
-                alternate-background-color: #F6F9FC;
-                color: #263A52;
-                border: 1px solid #E1E8F0;
-                border-radius: 7px;
-                gridline-color: #E8EDF3;
-                selection-background-color: #DCEAFE;
-                selection-color: #17243A;
-                outline: 0;
-            }
-
-            QTableWidget#DataTable::item, QTableView::item {
-                padding: 6px;
-            }
-
-            QHeaderView::section {
-                background-color: #EDF2F7;
-                color: #435873;
-                padding: 9px 7px;
-                border: none;
-                border-bottom: 1px solid #DCE4ED;
-                font-weight: 700;
-            }
-
-            QProgressBar {
-                background-color: #E0E8F2;
-                color: #24415F;
-                border: 1px solid #D4DFEA;
-                border-radius: 5px;
-                text-align: center;
-                min-height: 12px;
-                max-height: 18px;
-            }
-
-            QProgressBar::chunk {
-                background-color: #2867B2;
-                border-radius: 4px;
-            }
-
-            QScrollBar:vertical {
-                background: #F1F4F8;
-                width: 10px;
-                margin: 2px;
-                border-radius: 5px;
-            }
-
-            QScrollBar::handle:vertical {
-                background: #B7C5D5;
-                min-height: 25px;
-                border-radius: 5px;
-            }
-
-            QScrollBar::handle:vertical:hover {
-                background: #8FA5BD;
-            }
-
-            QScrollBar::add-line:vertical,
-            QScrollBar::sub-line:vertical {
-                height: 0;
-            }
-
-            QScrollBar:horizontal {
-                background: #F1F4F8;
-                height: 10px;
-                margin: 2px;
-                border-radius: 5px;
-            }
-
-            QScrollBar::handle:horizontal {
-                background: #B7C5D5;
-                min-width: 25px;
-                border-radius: 5px;
-            }
-
-            QScrollBar::add-line:horizontal,
-            QScrollBar::sub-line:horizontal {
-                width: 0;
-            }
-        """)
+        self.setStyleSheet(build_stylesheet())
