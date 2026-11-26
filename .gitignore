@@ -1,0 +1,31 @@
+# Event log datasets (do not commit large datasets to Git)
+*.xes
+*.xes.gz
+*.gz
+data/raw/*.xes
+data/raw/*.xes.gz
+
+# Python virtual environment
+.venv/
+venv/
+env/
+ENV/
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor / IDE settings
+.vscode/
+.idea/
+
+# macOS / OS metadata
+.DS_Store
+Thumbs.db
