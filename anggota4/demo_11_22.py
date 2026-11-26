@@ -1,5 +1,5 @@
 """Tes panel sendiri tanpa menunggu GUI Anggota 1:
-    python demo_11_22.py ..\\data\\BPIC17.xes.gz
+    (dari root project) python -m anggota4.demo_11_22 data\\BPIC17.xes.gz
 
 Kalau pm4py tidak bisa di-import (mis. scipy diblokir kebijakan laptop),
 otomatis pakai parser XES cadangan HANYA untuk pengujian lokal.
@@ -12,8 +12,8 @@ import xml.etree.ElementTree as ET
 import pandas as pd
 from PySide6.QtWidgets import QApplication, QFileDialog
 
-from columns import ACT, CASE, LIFE, RES, TS
-from panel_11_22 import Panel1122
+from .columns import ACT, CASE, LIFE, RES, TS
+from .panel_11_22 import Panel1122
 
 
 def load_xes_fallback(path: str) -> pd.DataFrame:
