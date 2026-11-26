@@ -6,10 +6,10 @@ from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import (QHBoxLayout, QLabel, QProgressBar, QPushButton,
                                QVBoxLayout, QWidget)
 
-from analysis_info import AnalysisInfoBar
-from case_explorer import CaseExplorerWidget
-from columns import ACT, CASE, POS, TS
-from ordering_11_22 import OrderingResult, analyze_cancel_then_accept, prepare_log
+from .analysis_info import AnalysisInfoBar
+from .case_explorer import CaseExplorerWidget
+from .columns import ACT, CASE, POS, TS
+from .ordering_11_22 import OrderingResult, analyze_cancel_then_accept, prepare_log
 
 
 class _Worker(QThread):

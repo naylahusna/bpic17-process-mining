@@ -15,8 +15,8 @@ from PySide6.QtGui import QBrush, QColor, QPainter, QPen, QStandardItem, QStanda
 from PySide6.QtWidgets import (QAbstractItemView, QDialog, QHeaderView, QLabel, QLineEdit, QSplitter,
                                QTableView, QVBoxLayout, QWidget)
 
-from columns import ACT, CASE, LIFE, POS, RES, TS
-from ordering_11_22 import prepare_log
+from .columns import ACT, CASE, LIFE, POS, RES, TS
+from .ordering_11_22 import prepare_log
 
 EVIDENCE_BG = QColor(255, 235, 150)
 PALETTE = [QColor(200, 60, 60), QColor(40, 150, 80), QColor(60, 100, 200), QColor(220, 140, 30)]

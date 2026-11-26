@@ -1,8 +1,8 @@
 import pandas as pd
 import pytest
 
-from columns import ACT, CASE, TS
-from ordering_11_22 import analyze_cancel_then_accept
+from .columns import ACT, CASE, TS
+from .ordering_11_22 import analyze_cancel_then_accept
 
 
 def make(cases, same_ts=False):
