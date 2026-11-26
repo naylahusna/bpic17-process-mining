@@ -12,7 +12,7 @@ import xml.etree.ElementTree as ET
 import pandas as pd
 from PySide6.QtWidgets import QApplication, QFileDialog
 
-from columns import ACT, CASE, LIFE, RES, TS
+from .columns import ACT, CASE, LIFE, RES, TS
 from panel_11_22 import Panel1122
 
 

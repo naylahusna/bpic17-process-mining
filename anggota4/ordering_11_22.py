@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 
 import pandas as pd
 
-from columns import ACT, CASE, ORIG, POS, TS
+from .columns import ACT, CASE, ORIG, POS, TS
 
 FIRST_ACT = "O_Cancelled"
 SECOND_ACT = "O_Accepted"

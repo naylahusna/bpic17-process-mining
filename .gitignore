@@ -1,0 +1,8 @@
+@'
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+BPI Challenge 2017_1_all.zip
+BPI Challenge 2017_1_all/
+'@ | Set-Content -Encoding UTF8 .gitignore
