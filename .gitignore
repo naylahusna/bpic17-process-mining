@@ -1,5 +1,5 @@
 @'
-# Event log datasets
+# Dataset
 *.xes
 *.xes.gz
 *.gz
@@ -8,13 +8,13 @@ data/raw/*.xes.gz
 BPI Challenge 2017_1_all.zip
 BPI Challenge 2017_1_all/
 
-# Python virtual environment
+# Python environment
 .venv/
 venv/
 env/
 ENV/
 
-# Python bytecode & cache
+# Python cache
 __pycache__/
 *.py[cod]
 *$py.class
@@ -25,11 +25,11 @@ __pycache__/
 .coverage
 htmlcov/
 
-# Editor / IDE settings
+# IDE
 .vscode/
 .idea/
 
-# macOS / OS metadata
+# OS
 .DS_Store
 Thumbs.db
 '@ | Set-Content -Encoding UTF8 .gitignore
